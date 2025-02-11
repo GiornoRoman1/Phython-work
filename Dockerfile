@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Add src directory to Python path
+ENV PYTHONPATH="/app/src:${PYTHONPATH}"
+
 # Set ownership to non-root user
 RUN chown -R appuser:appuser /app
 
@@ -26,5 +29,5 @@ USER appuser
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Run with explicit host and port
-CMD ["python", "-m", "gunicorn", "--bind", "0.0.0.0:8080", "--workers", "3", "app:app"]
+# Run gunicorn with the correct module path
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "3", "src.app:app"]
