@@ -1,0 +1,44 @@
+# src/app.py
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "healthy"})
+
+@app.route('/ready')
+def ready_check():
+    return jsonify({"status": "ready"})
+
+@app.route('/')
+def hello():
+    return jsonify({"message": "Hello from GCP Pipeline!"})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+
+# tests/test_app.py
+import pytest
+from src.app import app
+
+@pytest.fixture
+def client():
+    app.config['TESTING'] = True
+    with app.test_client() as client:
+        yield client
+
+def test_health_check(client):
+    response = client.get('/health')
+    assert response.status_code == 200
+    assert response.json == {"status": "healthy"}
+
+def test_ready_check(client):
+    response = client.get('/ready')
+    assert response.status_code == 200
+    assert response.json == {"status": "ready"}
+
+def test_hello(client):
+    response = client.get('/')
+    assert response.status_code == 200
+    assert response.json["message"] == "Hello from GCP Pipeline!"

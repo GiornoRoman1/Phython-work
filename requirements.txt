@@ -1,5 +1,4 @@
-google-cloud-storage
-google-cloud-build
-google-cloud-secret-manager
-pyyaml
-pytest
+Flask==3.0.0
+Werkzeug==3.0.1
+pytest==7.0.1
+gunicorn==21.2.0
