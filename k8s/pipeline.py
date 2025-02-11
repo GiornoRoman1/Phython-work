@@ -1,32 +1,26 @@
 import os
 from google.cloud import storage
 from google.cloud import build
+from google.cloud import secretmanager
 from google.cloud.devtools import cloudbuild_v1
 import yaml
 
-class GCPPipeline:
+class SecureGCPPipeline:
     def __init__(self, project_id, region):
-        """
-        Initialize the CI/CD pipeline with GCP project details
-        
-        Args:
-            project_id (str): Google Cloud Project ID
-            region (str): GCP region (e.g., 'us-central1')
-        """
         self.project_id = project_id
         self.region = region
         self.build_client = build.Client()
         self.storage_client = storage.Client()
+        self.secret_client = secretmanager.SecretManagerServiceClient()
 
-    def create_trigger(self, repo_name, branch_pattern, build_config_path):
-        """
-        Create a Cloud Build trigger for the repository
-        
-        Args:
-            repo_name (str): Name of the repository
-            branch_pattern (str): Branch pattern to trigger builds (e.g., '^main$')
-            build_config_path (str): Path to cloudbuild.yaml in the repo
-        """
+    def get_secret(self, secret_id, version_id="latest"):
+        """Safely retrieve secrets from Secret Manager"""
+        name = f"projects/{self.project_id}/secrets/{secret_id}/versions/{version_id}"
+        response = self.secret_client.access_secret_version(request={"name": name})
+        return response.payload.data.decode("UTF-8")
+
+    def create_secure_trigger(self, repo_name, branch_pattern, build_config_path):
+        """Create a Cloud Build trigger with security configurations"""
         trigger_config = {
             "name": f"{repo_name}-trigger",
             "github": {
@@ -36,139 +30,88 @@ class GCPPipeline:
                     "branch": branch_pattern
                 }
             },
-            "filename": build_config_path
+            "filename": build_config_path,
+            "serviceAccount": f"projects/{self.project_id}/serviceAccounts/cicd-service@{self.project_id}.iam.gserviceaccount.com"
         }
         
-        operation = self.build_client.create_build_trigger(
+        return self.build_client.create_build_trigger(
             project_id=self.project_id,
             trigger=trigger_config
         )
-        return operation
+    def create_secure_build_config(self, filename="cloudbuild.yaml"):
+        """Create a secure Cloud Build configuration"""
+        build_steps = [
+            # Install dependencies securely
+            {
+                "name": "python:3.9-slim",
+                "entrypoint": "pip",
+                "args": ["install", "-r", "requirements.txt", "--no-cache-dir"]
+            },
 
-    def create_build_config(self, steps, filename="cloudbuild.yaml"):
-        """
-        Create a Cloud Build configuration file
+            # Run security checks
+            {
+                "name": "python:3.9-slim",
+                "entrypoint": "pip",
+                "args": ["install", "bandit", "safety"],
+            },
+            {
+                "name": "python:3.9-slim",
+                "entrypoint": "bandit",
+                "args": ["-r", "./src", "-ll"]
+            },
+
+            # Build with security headers
+            {
+                "name": "gcr.io/cloud-builders/docker",
+                "args": [
+                    "build",
+                    "-t", f"gcr.io/{self.project_id}/app:$COMMIT_SHA",
+                    "--build-arg", "PROJECT_ID=$PROJECT_ID",
+                    "--no-cache",
+                    "."
+                ]
+            },
+
+            # Scan container for vulnerabilities
+            {
+                "name": "gcr.io/cloud-builders/gke-deploy",
+                "args": [
+                    "run",
+                    "--filename=k8s/",
+                    "--location=us-central1",
+                    "--cluster=training-cluster",
+                    "--timeout=1800s"
+                ]
+            }
+        ]
         
-        Args:
-            steps (list): List of build steps
-            filename (str): Output filename for the config
-        """
         build_config = {
-            "steps": steps,
-            "timeout": "1800s"
+            "steps": build_steps,
+            "timeout": "1800s",
+            "options": {
+                "logging": "CLOUD_LOGGING_ONLY",
+                "machineType": "N1_HIGHCPU_8"
+            },
+            "secretEnv": ["DATABASE_CONNECTION"]
         }
         
         with open(filename, 'w') as f:
             yaml.dump(build_config, f)
 
-    def run_pipeline(self, source_path, build_config):
-        """
-        Manually trigger a pipeline run
-        
-        Args:
-            source_path (str): Path to source code
-            build_config (dict): Build configuration
-        """
-        build = self.build_client.create_build(
-            project_id=self.project_id,
-            build={
-                "source": {"storage_source": source_path},
-                "steps": build_config["steps"]
-            }
-        )
-        return build
-
-    def setup_deployment_environment(self, env_name, env_vars):
-        """
-        Setup deployment environment variables
-        
-        Args:
-            env_name (str): Environment name (e.g., 'prod', 'dev')
-            env_vars (dict): Environment variables
-        """
-        from google.cloud import secretmanager
-        
-        secret_client = secretmanager.SecretManagerServiceClient()
-        parent = f"projects/{self.project_id}"
-
-        for key, value in env_vars.items():
-            secret_id = f"{env_name}_{key}"
-            
-            secret = secret_client.create_secret(
-                request={
-                    "parent": parent,
-                    "secret_id": secret_id,
-                    "secret": {"replication": {"automatic": {}}}
-                }
-            )
-            
-            secret_client.add_secret_version(
-                request={
-                    "parent": secret.name,
-                    "payload": {"data": value.encode("UTF-8")}
-                }
-            )
-
 def main():
-    # Example usage
-    pipeline = GCPPipeline(
+    pipeline = SecureGCPPipeline(
         project_id="personal-450419",
         region="us-central1"
     )
     
-    # Define build steps with dependency installation
-    build_steps = [
-        # Install Python dependencies
-        {
-            "name": "python:3.9",
-            "entrypoint": "pip",
-            "args": ["install", "-r", "requirements.txt", "-t", "/workspace/lib"]
-        },
-        # Run tests
-        {
-            "name": "python:3.9",
-            "entrypoint": "python",
-            "args": ["-m", "pytest", "tests/"],
-            "env": ["PYTHONPATH=/workspace/lib"]
-        },
-        # Build Docker image
-        {
-            "name": "gcr.io/cloud-builders/docker",
-            "args": ["build", "-t", "gcr.io/$personal-450419/app:$COMMIT_SHA", "."]
-        },
-        # Push Docker image
-        {
-            "name": "gcr.io/cloud-builders/docker",
-            "args": ["push", "gcr.io/$personal-450419/app:$COMMIT_SHA"]
-        },
-        # Deploy to GKE
-        {
-            "name": "gcr.io/cloud-builders/gke-deploy",
-            "args": [
-                "run",
-                "--filename=k8s/",
-                "--location=us-central1",
-                "--cluster=autopilot-cluster1"
-            ]
-        }
-    ]
+    # Create secure build configuration
+    pipeline.create_secure_build_config()
     
-    # Create build configuration
-    pipeline.create_build_config(build_steps)
-    
-    # Create trigger
-    pipeline.create_trigger(
-        repo_name="Phython-work",
-        branch_pattern="^main$",
+    # Create secure trigger
+    pipeline.create_secure_trigger(
+        repo_name="python-work",
+        branch_pattern="^master$",
         build_config_path="cloudbuild.yaml"
     )
-    
-    # Setup environment variables
-    env_vars = {
-        "DATABASE_URL": "personal-450419:us-central1:training-2-2025",
-        "API_KEY": "4d1bf14cd3113596af0159576b5026ddbb2fd252"
-    }
-    pipeline.setup_deployment_environment("prod", env_vars)
-
 if __name__ == "__main__":
     main()
