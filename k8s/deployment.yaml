@@ -1,19 +1,52 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: my-app
+  name: gcp-app
+  namespace: production
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: my-app
+      app: gcp-app
   template:
     metadata:
       labels:
-        app: my-app
+        app: gcp-app
     spec:
-    containers:
-      - name: my-app
-        image: gcr.io/PROJECT_ID/app:TAG
+      serviceAccountName: app-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+      - name: gcp-app
+        image: gcr.io/personal-450419/app:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        resources:
+          limits:
+            cpu: "1"
+            memory: "512Mi"
+          requests:
+            cpu: "0.5"
+            memory: "256Mi"
+        env:
+        - name: DATABASE_CONNECTION
+          valueFrom:
+            secretKeyRef:
+              name: database-connection
+              key: latest
         ports:
         - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
