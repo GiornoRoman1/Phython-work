@@ -1,0 +1,40 @@
+steps:
+  # Install dependencies
+  - name: 'python:3.9'
+    entrypoint: pip
+    args: ['install', '-r', 'requirements.txt', '-t', '/workspace/lib']
+
+  # Run tests
+  - name: 'python:3.9'
+    entrypoint: python
+    args: ['-m', 'pytest', 'tests/']
+    env:
+      - 'PYTHONPATH=/workspace/lib'
+
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/personal-450419/app:$BUILD_ID', '.']
+
+  # Push the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/personal-450419/app:$BUILD_ID']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'flask-app'
+      - '--image'
+      - 'gcr.io/personal-450419/app:$BUILD_ID'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+
+# Define the images to be pushed - this should match the tag used in steps
+images:
+  - 'gcr.io/personal-450419/app:$BUILD_ID'
+
+timeout: '1800s'
