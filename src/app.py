@@ -13,7 +13,7 @@ def ready_check():
 
 @app.route('/')
 def hello():
-    return jsonify({"message": "Hello from GCP Pipeline!"})
+    return jsonify({"message": "Hello from GCP Pipeline! - Testing CI/CD"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
