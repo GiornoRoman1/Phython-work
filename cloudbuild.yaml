@@ -27,3 +27,7 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: 'N1_HIGHCPU_8'
+
+# Specify default logging bucket behavior
+logsBucket: 'gs://personal-450419-cloudbuild-logs-202502'
