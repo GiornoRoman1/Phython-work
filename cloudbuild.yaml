@@ -34,3 +34,6 @@ images:
   - 'gcr.io/personal-450419/app:$COMMIT_SHA'
 
 timeout: '1200s'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
