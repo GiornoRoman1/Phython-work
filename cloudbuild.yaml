@@ -2,22 +2,20 @@ steps:
   # Install dependencies
   - name: 'python:3.9'
     entrypoint: pip
-    args: ['install', '-r', 'requirements.txt', '-t', '/workspace/lib']
+    args: ['install', '-r', 'requirements.txt']
 
   # Run tests
   - name: 'python:3.9'
     entrypoint: python
     args: ['-m', 'pytest', 'tests/']
-    env:
-      - 'PYTHONPATH=/workspace/lib'
 
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/personal-450419/app:$BUILD_ID', '.']
+    args: ['build', '-t', 'gcr.io/personal-450419/app:$COMMIT_SHA', '.']
 
   # Push the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/personal-450419/app:$BUILD_ID']
+    args: ['push', 'gcr.io/personal-450419/app:$COMMIT_SHA']
 
   # Deploy to Cloud Run
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -26,16 +24,13 @@ steps:
       - 'deploy'
       - 'flask-app'
       - '--image'
-      - 'gcr.io/personal-450419/app:$BUILD_ID'
+      - 'gcr.io/personal-450419/app:$COMMIT_SHA'
       - '--region'
       - 'us-central1'
       - '--platform'
       - 'managed'
-      - '--allow-unauthenticated'
 
-# Define the images to be pushed - this should match the tag used in steps
 images:
-  - 'gcr.io/personal-450419/app:$BUILD_ID'
+  - 'gcr.io/personal-450419/app:$COMMIT_SHA'
 
-timeout: '1800s'
-
+timeout: '1200s'
