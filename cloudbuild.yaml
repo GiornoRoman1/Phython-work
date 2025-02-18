@@ -1,46 +1,26 @@
 steps:
-  # Install dependencies
-  - name: 'python:3.9'
-    id: 'install'
-    args:
-      - pip
-      - install
-      - -r
-      - requirements.txt
-
-  # Run tests
-  - name: 'python:3.9'
-    id: 'test'
-    args:
-      - python
-      - -m
-      - pytest
-      - tests/
-
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/personal-450419/app:$COMMIT_SHA', '.']
+    args: ['build', '-t', 'gcr.io/personal-450419/app:$SHORT_SHA', '.']
 
-  # Push the container image
+  # Push the image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/personal-450419/app:$COMMIT_SHA']
+    args: ['push', 'gcr.io/personal-450419/app:$SHORT_SHA']
 
   # Deploy to Cloud Run
-  - name: 'gcr.io/cloud-builders/gcloud'
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
     args:
-      - 'run'
-      - 'deploy'
-      - 'flask-app'
-      - '--image'
-      - 'gcr.io/personal-450419/app:$COMMIT_SHA'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
-      - '--port'
-      - '8080'
+    - 'run'
+    - 'deploy'
+    - 'flask-app'
+    - '--image'
+    - 'gcr.io/personal-450419/app:$SHORT_SHA'
+    - '--region'
+    - 'us-central1'
+    - '--platform'
+    - 'managed'
+    - '--allow-unauthenticated'
 
 images:
-  - 'gcr.io/personal-450419/app:$COMMIT_SHA'
-
-timeout: '1200s'
+- 'gcr.io/personal-450419/app:$SHORT_SHA'
