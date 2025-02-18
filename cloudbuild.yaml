@@ -21,6 +21,8 @@ steps:
     - '--platform'
     - 'managed'
     - '--allow-unauthenticated'
+    - '--port'
+    - '8080'
 
 images:
 - 'gcr.io/personal-450419/app:$SHORT_SHA'
