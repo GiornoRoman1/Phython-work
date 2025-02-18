@@ -37,6 +37,8 @@ steps:
       - 'us-central1'
       - '--platform'
       - 'managed'
+      - '--port'
+      - '8080'
 
 images:
   - 'gcr.io/personal-450419/app:$COMMIT_SHA'
