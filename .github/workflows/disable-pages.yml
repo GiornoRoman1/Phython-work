@@ -1,0 +1,14 @@
+cat > .github/workflows/disable-pages.yml << 'EOL'
+name: Disable Pages
+on:
+  push:
+    branches: [ master ]
+jobs:
+  disable-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disable Pages
+        run: |
+          echo "GitHub Pages is disabled for this repository"
+          exit 0
+EOL
